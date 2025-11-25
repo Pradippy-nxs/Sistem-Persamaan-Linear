@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sistem-persamaan-linear"
+version = "0.1.0"
+description = "Program Sistem Persamaan Linear (SPL) dengan beberapa metode numerik."
+authors = [
+  { name = "raflyrzp" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26.3",
+  "scipy>=1.13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "mypy>=1.8.0",
+  "ruff>=0.3.7",
+  "black>=24.11.0",
+  "jupyterlab>=4.1.0",
+]
+
+[project.scripts]
+linear-solver = "linear_system.cli:main"
+
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312", "py313", "py314"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+fix = true
+select = ["E", "F", "I", "B"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
