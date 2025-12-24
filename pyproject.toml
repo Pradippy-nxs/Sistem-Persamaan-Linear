@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sistem-persamaan-linear"
 version = "0.1.0"
-description = "Program Sistem Persamaan Linear (SPL) dengan beberapa metode numerik."
+description = "Program Sistem Persamaan Linear (SPL)"
 authors = [
   { name = "raflyrzp" }
 ]
@@ -37,7 +37,7 @@ line-length = 200
 target-version = "py311"
 fix = true
 select = ["E", "F", "I", "B"]
-ignore = []
+ignore = ["E701"]
 
 [tool.mypy]
 python_version = "3.11"
