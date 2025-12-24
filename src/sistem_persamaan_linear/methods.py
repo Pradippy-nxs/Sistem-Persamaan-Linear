@@ -1,67 +1,91 @@
 from copy import deepcopy
 from typing import Dict, List, Tuple, Union
 
-import numpy as np  # Pastikan install numpy: pip install numpy
+import numpy as np
 
-from .utils import Matrix, Vector, format_matrix, residual, vec_norm_inf
+from .utils import Matrix, Vector, fmt_num, residual, vec_norm_inf
 
-StepLog = List[Tuple[str, str]] # (Title, Content)
+StepLog = List[Tuple[str, str]]
 
 def format_aug(A, b):
-    # Helper untuk menampilkan Augmented Matrix
     lines = []
-    for r, val in zip(A, b):
-        row_str = "  ".join(f"{x:8.4f}" for x in r)
-        lines.append(f"| {row_str} | {val:8.4f} |")
+    for r, val in zip(A, b, strict=False):
+        row_str = "  ".join(fmt_num(x).rjust(6) for x in r)
+        lines.append(f"| {row_str} | {fmt_num(val).rjust(6)} |")
     return "\n".join(lines)
 
-def gauss_elimination(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
+def gauss_elimination_adaptive(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
     A = deepcopy(A)
     b = deepcopy(b)
     n = len(A)
     steps: StepLog = []
 
-    steps.append(("Status Awal", f"Matriks Augmented Awal:\n{format_aug(A, b)}"))
+    steps.append(("Status Awal", f"Matriks Awal:\n{format_aug(A, b)}"))
 
-    # Eliminasi Maju
     for k in range(n - 1):
-        steps.append((f"--- Iterasi Kolom {k+1} ---", f"Tujuan: Membuat nol di bawah elemen pivot A[{k+1},{k+1}]"))
+        current_pivot = A[k][k]
 
-        # Pivoting
-        pivot_row = max(range(k, n), key=lambda i: abs(A[i][k]))
-        if abs(A[pivot_row][k]) < 1e-12:
-            raise ValueError(f"Pivot nol terdeteksi di kolom {k+1}. Matriks singular.")
+        best_row_idx = max(range(k, n), key=lambda i: abs(A[i][k]))
+        max_val = A[best_row_idx][k]
 
-        if pivot_row != k:
-            A[k], A[pivot_row] = A[pivot_row], A[k]
-            b[k], b[pivot_row] = b[pivot_row], b[k]
-            steps.append(("Partial Pivoting", f"Menukar Baris {k+1} dengan Baris {pivot_row+1} agar pivot lebih besar."))
+        steps.append((f"--- Cek Kondisi Kolom {k+1} ---",
+                      f"Pivot saat ini (A[{k+1},{k+1}]): {fmt_num(current_pivot)}\n"
+                      f"Kandidat terbesar di bawahnya: {fmt_num(max_val)} (Baris {best_row_idx+1})"))
+
+        should_swap = False
+        reason = ""
+
+        if abs(current_pivot) < 1e-12:
+            if abs(max_val) < 1e-12:
+                raise ValueError(f"Sistem Singular: Kolom {k+1} isinya nol semua.")
+            should_swap = True
+            reason = "Pivot bernilai 0. Wajib tukar."
+        elif best_row_idx != k:
+            should_swap = True
+            reason = "Ditemukan elemen yang lebih besar (Partial Pivoting)."
+        else:
+            should_swap = False
+            reason = "Pivot saat ini sudah optimal (Mode Naive)."
+
+        if should_swap:
+            A[k], A[best_row_idx] = A[best_row_idx], A[k]
+            b[k], b[best_row_idx] = b[best_row_idx], b[k]
+            steps.append(("KEPUTUSAN: Lakukan Pivoting", f"{reason}\n-> Tukar Baris {k+1} dengan {best_row_idx+1}."))
+        else:
+            steps.append(("KEPUTUSAN: Lanjut Tanpa Tukar", reason))
 
         pivot = A[k][k]
 
-        # Eliminasi
         ops = []
         for i in range(k + 1, n):
+            if abs(A[i][k]) < 1e-12: continue
+
             factor = A[i][k] / pivot
-            ops.append(f"B{i+1} = B{i+1} - ({factor:.4f}) * B{k+1}")
+            ops.append(f"B{i+1} = B{i+1} - ({fmt_num(factor)}) * B{k+1}")
+
             for j in range(k, n):
                 A[i][j] -= factor * A[k][j]
             b[i] -= factor * b[k]
 
         if ops:
-            steps.append((f"Eliminasi di Kolom {k+1}", "\n".join(ops)))
-            steps.append((f"Hasil Iterasi {k+1}", format_aug(A, b)))
+            steps.append(("Eliminasi Baris di Bawahnya", "\n".join(ops)))
+        steps.append((f"Status Matriks (Iterasi {k+1})", format_aug(A, b)))
 
-    # Back Substitution
+    return back_substitution(A, b, n, steps)
+
+def back_substitution(A, b, n, steps):
     x = [0.0] * n
     back_steps = []
     for i in range(n - 1, -1, -1):
         s = sum(A[i][j] * x[j] for j in range(i + 1, n))
+        if abs(A[i][i]) < 1e-12:
+             raise ValueError("Solusi infinite atau tidak ada solusi.")
         x[i] = (b[i] - s) / A[i][i]
-        expr = f"({b[i]:.4f} - {s:.4f}) / {A[i][i]:.4f}"
-        back_steps.append(f"x{i+1} = {expr} = {x[i]:.6f}")
 
-    steps.append(("Substitusi Mundur (Back Substitution)", "\n".join(back_steps)))
+        expr = f"({fmt_num(b[i])} - {fmt_num(s)}) / {fmt_num(A[i][i])}"
+        back_steps.append(f"x{i+1} = {expr} = {fmt_num(x[i])}")
+
+    steps.append(("Substitusi Mundur", "\n".join(back_steps)))
     return x, steps
 
 def gauss_jordan(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
@@ -70,44 +94,37 @@ def gauss_jordan(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
     n = len(A)
     steps: StepLog = []
 
-    steps.append(("Status Awal", f"Matriks Augmented Awal:\n{format_aug(A, b)}"))
+    steps.append(("Status Awal", f"{format_aug(A, b)}"))
 
     for k in range(n):
-        steps.append((f"--- Fokus Diagonal Utama {k+1} ---", ""))
+        steps.append((f"--- Fokus Diagonal {k+1} ---", ""))
 
-        # Pivoting
         pivot_row = max(range(k, n), key=lambda i: abs(A[i][k]))
-        if abs(A[pivot_row][k]) < 1e-12:
-            raise ValueError("Matriks singular.")
+        if abs(A[pivot_row][k]) < 1e-12: raise ValueError("Singular")
 
         if pivot_row != k:
             A[k], A[pivot_row] = A[pivot_row], A[k]
             b[k], b[pivot_row] = b[pivot_row], b[k]
-            steps.append(("Pivoting", f"Tukar Baris {k+1} <-> {pivot_row+1}"))
+            steps.append(("Pivoting", f"Tukar B{k+1} <-> B{pivot_row+1}"))
 
-        # Normalisasi (Membuat pivot menjadi 1)
         pivot = A[k][k]
-        if abs(pivot - 1.0) > 1e-12:
-            for j in range(k, n):
-                A[k][j] /= pivot
-            b[k] /= pivot
-            steps.append(("Normalisasi Pivot", f"B{k+1} = B{k+1} / {pivot:.4f} (Agar diagonal jadi 1)"))
 
-        # Eliminasi (Membuat 0 di atas dan bawah pivot)
+        # Normalisasi
+        for j in range(k, n): A[k][j] /= pivot
+        b[k] /= pivot
+        steps.append(("Normalisasi", f"B{k+1} dibagi {fmt_num(pivot)} agar pivot jadi 1"))
+
+        # Eliminasi
         ops = []
         for i in range(n):
-            if i == k or abs(A[i][k]) < 1e-12:
-                continue
+            if i == k or abs(A[i][k]) < 1e-12: continue
             factor = A[i][k]
-            for j in range(k, n):
-                A[i][j] -= factor * A[k][j]
+            for j in range(k, n): A[i][j] -= factor * A[k][j]
             b[i] -= factor * b[k]
-            ops.append(f"B{i+1} = B{i+1} - ({factor:.4f}) * B{k+1}")
+            ops.append(f"B{i+1} - ({fmt_num(factor)})xB{k+1}")
 
-        if ops:
-            steps.append((f"Eliminasi Kolom {k+1}", "\n".join(ops)))
-
-        steps.append((f"Posisi Matriks (Iterasi {k+1})", format_aug(A, b)))
+        if ops: steps.append(("Eliminasi", "\n".join(ops)))
+        steps.append((f"Matriks Iterasi {k+1}", format_aug(A, b)))
 
     return b, steps
 
@@ -118,10 +135,10 @@ def cramer(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
     steps: StepLog = []
 
     d_main = np.linalg.det(A_np)
-    steps.append(("Determinan Utama", f"Matriks A:\n{format_matrix(A)}\n\nDet(A) = {d_main:.6f}"))
+    steps.append(("Determinan Utama", f"Det(A) = {fmt_num(d_main)}"))
 
     if abs(d_main) < 1e-12:
-        raise ValueError("Determinan nol (atau mendekati nol). Cramer tidak bisa digunakan.")
+        raise ValueError("Det(A) = 0. Cramer gagal.")
 
     x = []
     for i in range(n):
@@ -130,24 +147,20 @@ def cramer(A: Matrix, b: Vector) -> Tuple[Vector, StepLog]:
         di = np.linalg.det(Ai)
         xi = di / d_main
         x.append(xi)
-
-        # Konversi ke list untuk display
-        Ai_list = Ai.tolist()
-        steps.append((f"--- Mencari x{i+1} ---",
-                      f"Ganti kolom {i+1} dengan vektor b:\n{format_matrix(Ai_list)}\n\n"
-                      f"Det(A{i+1}) = {di:.6f}\n"
-                      f"x{i+1} = {di:.6f} / {d_main:.6f} = {xi:.6f}"))
+        steps.append((f"Mencari x{i+1}",
+                      f"Det(A{i+1}) = {fmt_num(di)}\n"
+                      f"x{i+1} = {fmt_num(di)} / {fmt_num(d_main)} = {fmt_num(xi)}"))
 
     return x, steps
 
 def run_method(method_name: str, A: Matrix, b: Vector):
     methods = {
-        "Gauss Eliminasi": gauss_elimination,
+        "Gauss Eliminasi": gauss_elimination_adaptive,
         "Gauss-Jordan": gauss_jordan,
         "Cramer": cramer,
     }
     if method_name not in methods:
-        raise ValueError(f"Metode {method_name} belum didukung.")
+        raise ValueError(f"Metode {method_name} tidak dikenali.")
     return methods[method_name](A, b)
 
 def validate_solution(A: Matrix, b: Vector, x: Vector) -> Dict[str, Union[float, Vector]]:

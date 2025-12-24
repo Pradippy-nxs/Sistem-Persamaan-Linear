@@ -1,9 +1,15 @@
-# import math
 from typing import List, Tuple
 
 Number = float
 Matrix = List[List[Number]]
 Vector = List[Number]
+
+def fmt_num(val: float) -> str:
+    if abs(val - round(val)) < 1e-9:
+        return str(int(round(val)))
+
+    formatted = f"{val:.4f}".rstrip('0').rstrip('.')
+    return formatted
 
 def parse_matrix(entries) -> Tuple[Matrix, Vector]:
     rows = len(entries)
@@ -27,7 +33,7 @@ def parse_matrix(entries) -> Tuple[Matrix, Vector]:
     return A, b
 
 def format_row(row):
-    content = "  ".join(f"{v:8.4f}" for v in row)
+    content = "  ".join(fmt_num(v).rjust(6) for v in row)
     return f"| {content} |"
 
 def format_matrix(A: Matrix) -> str:
@@ -38,22 +44,23 @@ def check_diagonal_dominance(A: Matrix) -> Tuple[bool, List[str]]:
     is_dominant = True
     details = []
 
+    details.append("--- Cek Syarat: |aii| >= sum(|aij|) ---")
+
     for i in range(n):
         diag = abs(A[i][i])
         off_diag_sum = sum(abs(A[i][j]) for j in range(n) if i != j)
 
-        status = "OK" if diag >= off_diag_sum else "TIDAK"
-        if diag < off_diag_sum:
+        if diag >= off_diag_sum:
+            status = "OK"
+        else:
+            status = "GAGAL"
             is_dominant = False
 
         details.append(
-            f"Baris {i+1}: |{A[i][i]:.2f}| (diag) vs {off_diag_sum:.2f} (sisa) -> {status}"
+            f"Baris {i+1}: |{fmt_num(A[i][i])}| >= {fmt_num(off_diag_sum)} ? -> {status}"
         )
 
     return is_dominant, details
-
-def pretty_solution(x: Vector) -> str:
-    return "\n".join(f"x{i+1} = {v:10.6f}" for i, v in enumerate(x))
 
 def residual(A: Matrix, x: Vector, b: Vector) -> Vector:
     r = []
